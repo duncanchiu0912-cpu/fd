@@ -1,14 +1,16 @@
 {
   "name": "receipt-ledger-pro",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n api,web -c blue,green \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "node --watch server/index.js",
     "dev:web": "vite --host 0.0.0.0",
+    "dev:vue": "vite --config vite.vue.config.js --host 0.0.0.0",
     "build": "vite build",
-    "start": "NODE_ENV=production node server/index.js",
+    "build:vue": "vite build --config vite.vue.config.js",
+    "start": "node server/index.js",
     "db:push": "prisma db push --schema server/prisma/schema.prisma",
     "db:studio": "prisma studio --schema server/prisma/schema.prisma"
   },
@@ -17,7 +19,6 @@
     "bcryptjs": "^2.4.3",
     "chart.js": "^4.4.7",
     "cookie-parser": "^1.4.7",
-    "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
@@ -28,10 +29,12 @@
     "react-chartjs-2": "^5.3.0",
     "react-dom": "^18.3.1",
     "tesseract.js": "^5.1.1",
+    "vue": "^3.5.13",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
+    "@vitejs/plugin-vue": "^5.2.1",
     "concurrently": "^9.1.2",
     "prisma": "^6.4.1",
     "vite": "^6.1.0"
