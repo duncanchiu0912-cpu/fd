@@ -8,10 +8,27 @@ const today = () => new Date().toLocaleDateString('sv-SE');
 const emptyForm = () => ({ merchant: '', amount: '', date: today(), category: '其他', kind: '發票', invoiceNumber: '', notes: '' });
 
 async function api(url, options = {}) {
-  const response = await fetch(url, { credentials: 'include', ...options, headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers } });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 8000);
+  let response;
+  try {
+    response = await fetch(url, {
+      credentials: 'include',
+      ...options,
+      signal: controller.signal,
+      headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers },
+    });
+  } catch (error) {
+    if (error.name === 'AbortError') throw new Error('API 連線逾時。請確認後端已啟動，並檢查 .env 與資料庫設定。');
+    throw new Error('無法連線到 API。請確認 npm run dev:api 正在執行。');
+  } finally {
+    window.clearTimeout(timeout);
+  }
   if (!response.ok) {
     const result = await response.json().catch(() => ({}));
-    throw new Error(result.error || '連線失敗，請稍後再試。');
+    const error = new Error(result.error || `API 回應錯誤（${response.status}）。`);
+    error.status = response.status;
+    throw error;
   }
   return response.status === 204 ? null : response.json();
 }
@@ -27,7 +44,7 @@ function validateInvoice(form) {
   return '';
 }
 
-function Auth({ onAuthenticated }) {
+function Auth({ onAuthenticated, startupError }) {
   const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -42,9 +59,10 @@ function Auth({ onAuthenticated }) {
   }
   return <main className="ledger-auth"><form className="ledger-card" onSubmit={submit}>
     <div className="ledger-logo">收</div><p className="ledger-kicker">YOUR PERSONAL LEDGER</p><h1>發票存摺 Pro</h1><p className="ledger-subtitle">發票、收據與網購消費，集中管理更清楚。</p>
+    {startupError && <p className="ledger-error" role="status">{startupError}</p>}
     <label>Email<input type="email" autoComplete="email" required maxLength="254" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" /></label>
     <label>密碼<input type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength="8" maxLength="128" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="至少 8 個字元" /></label>
-    {error && <p className="ledger-error">{error}</p>}<button className="ledger-primary" disabled={busy}>{busy ? '請稍候…' : mode === 'login' ? '登入' : '建立帳號'}</button>
+    {error && <p className="ledger-error" role="alert">{error}</p>}<button className="ledger-primary" disabled={busy}>{busy ? '請稍候…' : mode === 'login' ? '登入' : '建立帳號'}</button>
     <p className="ledger-switch">{mode === 'login' ? '還沒有帳號？' : '已經有帳號？'} <button type="button" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}>{mode === 'login' ? '立即註冊' : '返回登入'}</button></p>
   </form></main>;
 }
@@ -88,13 +106,30 @@ function ExpenseForm({ initial, onSave, onClose }) {
 export default function App() {
   const [user, setUser] = useState(null);
   const [checking, setChecking] = useState(true);
+  const [startupError, setStartupError] = useState('');
   const [invoices, setInvoices] = useState([]);
   const [modal, setModal] = useState(null);
   const [query, setQuery] = useState('');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
-  useEffect(() => { api('/api/auth/me').then(({ user: current }) => setUser(current)).catch(() => {}).finally(() => setChecking(false)); }, []);
-  useEffect(() => { if (!user) return; api('/api/invoices').then(({ invoices: rows }) => setInvoices(rows)).catch((err) => setError(err.message)); }, [user]);
+
+  useEffect(() => {
+    let active = true;
+    api('/api/auth/me')
+      .then(({ user: current }) => { if (active) setUser(current); })
+      .catch((err) => {
+        if (active && err.status !== 401) setStartupError(err.message);
+      })
+      .finally(() => { if (active) setChecking(false); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    api('/api/invoices').then(({ invoices: rows }) => { if (active) { setInvoices(rows); setError(''); } }).catch((err) => { if (active) setError(err.message); });
+    return () => { active = false; };
+  }, [user]);
   useEffect(() => () => { terminateReceiptOcr(); }, []);
   const filtered = useMemo(() => invoices.filter((item) => `${item.merchant} ${item.invoiceNumber || ''} ${item.notes || ''}`.toLowerCase().includes(query.toLowerCase())), [invoices, query]);
   const total = invoices.reduce((sum, item) => sum + item.amount, 0);
@@ -110,13 +145,14 @@ export default function App() {
     try { await api(`/api/invoices/${item.id}`, { method: 'DELETE' }); await refresh(); } catch (err) { setError(err.message); }
   }
   async function logout() { await api('/api/auth/logout', { method: 'POST' }).catch(() => {}); setUser(null); setInvoices([]); }
-  if (checking) return <main className="ledger-loading">載入中…</main>;
-  if (!user) return <Auth onAuthenticated={setUser} />;
+
+  if (checking) return <main className="ledger-loading" role="status"><span className="ledger-spinner" />正在確認登入狀態…</main>;
+  if (!user) return <Auth onAuthenticated={setUser} startupError={startupError} />;
   return <main className="ledger-page"><header className="ledger-top"><a className="ledger-brand" href="#home"><span className="ledger-logo">收</span><span>發票存摺<small>PRO · PERSONAL LEDGER</small></span></a><div className="ledger-account">{user.email}<button onClick={logout}>登出</button></div></header>
     <section className="ledger-welcome"><p className="ledger-kicker">PERSONAL FINANCE</p><h1>每一筆消費，都好好收藏。</h1><p>集中管理發票、收據與網購消費。</p></section>
     <section className="ledger-summary"><article><span>本月支出</span><strong>{money.format(thisMonth.reduce((sum, item) => sum + item.amount, 0))}</strong><small>{thisMonth.length} 筆消費</small></article><article><span>累計消費</span><strong>{money.format(total)}</strong><small>所有已記錄消費</small></article><article><span>消費筆數</span><strong>{invoices.length}</strong><small>平均 {money.format(invoices.length ? Math.round(total / invoices.length) : 0)}</small></article></section>
     <section className="ledger-list"><header><div><h2>消費紀錄</h2><p>共 {filtered.length} 筆</p></div><div className="ledger-tools"><input aria-label="搜尋" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋店家、發票號碼…" /><button className="ledger-primary" onClick={() => setModal({})}>＋ 新增消費</button></div></header>
-      {(error || notice) && <p className={error ? 'ledger-error' : 'ledger-notice'}>{error || notice}</p>}
+      {(error || notice) && <p className={error ? 'ledger-error' : 'ledger-notice'} role={error ? 'alert' : 'status'}>{error || notice}</p>}
       {filtered.length ? <div className="ledger-table-wrap"><table><thead><tr><th>店家／項目</th><th>類別</th><th>日期</th><th>類型</th><th>金額</th><th>操作</th></tr></thead><tbody>{filtered.map((item) => <tr key={item.id}><td><strong>{item.merchant}</strong><small>{item.invoiceNumber || item.notes || '—'}</small></td><td>{item.category}</td><td>{new Intl.DateTimeFormat('zh-TW').format(new Date(item.date))}</td><td>{item.kind}</td><td className="ledger-amount">{money.format(item.amount)}</td><td><button className="ledger-text-button" onClick={() => setModal({ invoice: { ...item, date: new Date(item.date).toLocaleDateString('sv-SE') } })}>編輯</button><button className="ledger-text-button danger" onClick={() => remove(item)}>刪除</button></td></tr>)}</tbody></table></div> : <div className="ledger-empty"><strong>{invoices.length ? '找不到符合條件的消費' : '還沒有消費紀錄'}</strong><p>{invoices.length ? '試試其他搜尋關鍵字。' : '新增第一筆消費，開始整理生活帳本。'}</p></div>}
     </section><footer className="ledger-footer">消費資料依帳號隔離儲存 · OCR 圖片只在本機瀏覽器辨識</footer>{modal && <ExpenseForm initial={modal.invoice} onClose={() => setModal(null)} onSave={save} />}
   </main>;

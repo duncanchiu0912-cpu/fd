@@ -1,0 +1,2 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap');
+.ledger-loading{min-height:100vh;display:flex;align-items:center;justify-content:center;gap:12px;background:#f6f7f5;color:#58745e;font:14px 'Noto Sans TC',system-ui,sans-serif}.ledger-spinner{width:20px;height:20px;border:2px solid #dfe8df;border-top-color:#58745e;border-radius:50%;animation:ledger-spin .8s linear infinite}@keyframes ledger-spin{to{transform:rotate(360deg)}}
