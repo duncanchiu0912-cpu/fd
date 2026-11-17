@@ -25,8 +25,8 @@ class AppErrorBoundary extends React.Component {
             <div className="runtime-error-mark">!</div>
             <p className="ledger-kicker">APPLICATION ERROR</p>
             <h1>頁面載入時發生問題</h1>
-            <p>請先重新整理頁面。如果問題持續，請開啟瀏覽器開發者工具的 Console，複製第一筆紅色錯誤訊息以便排查。</p>
-            <pre>{this.state.error?.message || '未知的前端錯誤'}</pre>
+            <p>應用程式發生前端錯誤。請複製下方訊息，方便排查。</p>
+            <pre>{this.state.error?.stack || this.state.error?.message || '未知的前端錯誤'}</pre>
             <button type="button" className="ledger-primary" onClick={() => window.location.reload()}>重新載入</button>
           </div>
         </main>
@@ -46,3 +46,4 @@ createRoot(rootElement).render(
     </AppErrorBoundary>
   </React.StrictMode>,
 );
+window.__receiptAppMounted?.();

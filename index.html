@@ -6,9 +6,38 @@
     <meta name="theme-color" content="#f6f7f5" />
     <meta name="description" content="管理發票、收據與網購消費的個人記帳工具。" />
     <title>發票存摺 Pro</title>
+    <style>
+      :root{font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif;color:#29332d;background:#f6f7f5}*{box-sizing:border-box}body{margin:0;min-height:100vh}.boot-screen{min-height:100vh;display:grid;place-items:center;padding:20px}.boot-card{width:min(100%,520px);padding:28px;background:#fff;border:1px solid #e8ece6;border-radius:14px;box-shadow:0 12px 40px #34402f0b}.boot-logo{width:42px;height:42px;display:grid;place-items:center;border-radius:13px;background:#e8eee8;color:#55715c;font-weight:700;font-size:20px}.boot-card h1{font-size:21px;margin:17px 0 7px}.boot-card p{color:#727a71;line-height:1.7;font-size:13px}.boot-error{display:none}.boot-error pre{padding:12px;background:#f5f6f3;border-radius:7px;white-space:pre-wrap;overflow-wrap:anywhere;color:#8b423d;font-size:12px}.boot-help{font-size:12px!important}.boot-spinner{width:18px;height:18px;display:inline-block;vertical-align:middle;border:2px solid #dfe8df;border-top-color:#58745e;border-radius:50%;animation:spin .8s linear infinite;margin-right:8px}@keyframes spin{to{transform:rotate(360deg)}}
+    </style>
+    <script>
+      (() => {
+        let mounted = false;
+        window.__receiptAppMounted = () => { mounted = true; };
+        const showError = (message) => {
+          if (mounted) return;
+          const loading = document.getElementById('boot-loading');
+          const error = document.getElementById('boot-error');
+          const details = document.getElementById('boot-error-details');
+          if (loading) loading.hidden = true;
+          if (error) error.style.display = 'block';
+          if (details) details.textContent = String(message || '無法載入前端程式。');
+        };
+        window.addEventListener('error', (event) => {
+          if (event.target && event.target !== window) showError(`無法載入資源：${event.target.src || event.target.href || '未知資源'}`);
+          else showError(event.message || '前端發生錯誤。');
+        }, true);
+        window.addEventListener('unhandledrejection', (event) => showError(event.reason?.stack || event.reason?.message || event.reason));
+        window.setTimeout(() => {
+          if (!mounted) showError('前端超過 15 秒仍未啟動。請確認 npm run dev 的 Vite 終端機沒有編譯錯誤，並重新安裝相依套件。');
+        }, 15000);
+      })();
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <main class="boot-screen" id="boot-loading"><section class="boot-card"><div class="boot-logo">收</div><h1><span class="boot-spinner" aria-hidden="true"></span>發票存摺 Pro 載入中</h1><p>正在啟動應用程式，請稍候。</p></section></main>
+      <main class="boot-screen boot-error" id="boot-error" role="alert"><section class="boot-card"><div class="boot-logo">!</div><h1>應用程式無法載入</h1><p>目前顯示的是載入錯誤，而不是空白頁。請看下方錯誤，並檢查 Vite 終端機。</p><pre id="boot-error-details"></pre><p class="boot-help">可先停止伺服器，重新執行 <code>npm install</code> 和 <code>npm run dev</code>，再強制重新整理（Ctrl+Shift+R／Cmd+Shift+R）。</p></section></main>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
